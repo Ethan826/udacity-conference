@@ -553,8 +553,20 @@ class ConferenceApi(remote.Service):
         """Unregister user for selected conference."""
         return self._conferenceRegistration(request, reg=False)
 
+    def _copySessionToForm(self, sess):
+        sf = SessionForm()
+        for field in sf.all_fields():
+            if hasattr(sess, field.name):
+                if (field.name == "date" or field.name == "time") and getattr(
+                        sess, field.name):
+                    setattr(sf, field.name, str(getattr(sess, field.name)))
+                else:
+                    setattr(sf, field.name, getattr(sess, field.name))
+        sf.check_initialized()
+        return sf
+
     @endpoints.method(SESS_POST_REQUEST,
-                      StringMessage,
+                      SessionForm,
                       path='session',
                       http_method='POST',
                       name='createSession')
@@ -581,11 +593,9 @@ class ConferenceApi(remote.Service):
         data = {}
         for field in request.all_fields():
             if field.name == "date" and getattr(request, field.name):
-                data[field.name] = parse(getattr(request,
-                                                 field.name)).date()
+                data[field.name] = parse(getattr(request, field.name)).date()
             elif field.name == "time" and getattr(request, field.name):
-                data[field.name] = parse(getattr(request,
-                                                 field.name)).time()
+                data[field.name] = parse(getattr(request, field.name)).time()
             elif field.name == "websafeConferenceKey":
                 pass
             else:
@@ -597,6 +607,12 @@ class ConferenceApi(remote.Service):
         data['key'] = s_key
         data['conferenceId'] = conf.key
         Session(**data).put()
-        return StringMessage(data=str(data))
+        return self._copySessionToForm(request
+                                       )  # Must be put in a Session form
+
+        @endpoints.method()
+        def getConferenceSessions():
+            """Given a conference, return all sessions."""
+            pass
 
 api = endpoints.api_server([ConferenceApi])  # register API

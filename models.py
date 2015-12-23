@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 """models.py
 
 Udacity conference server-side Python App Engine data & ProtoRPC models
@@ -76,7 +75,6 @@ class SessionForm(messages.Message):
     typeOfSession = messages.StringField(5)
     date = messages.StringField(6)
     time = messages.StringField(7)
-    # organizerDisplayName = messages.StringField(12)
 
 
 class SessionForms(messages.Message):
