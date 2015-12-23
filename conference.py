@@ -614,7 +614,7 @@ class ConferenceApi(remote.Service):
         return self._copySessionToForm(request)
 
     @endpoints.method(SESS_GET_REQUEST,
-                      StringMessage,
+                      SessionForms,
                       path='sesssions/{websafeConferenceKey}',
                       http_method='GET',
                       name='getConferenceSessions')
@@ -625,9 +625,10 @@ class ConferenceApi(remote.Service):
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % wsck)
-        foo = Session.query(
-            ancestor=conf.key).fetch()  # This search is not working
-        # confs = Conference.query(ancestor=ndb.Key(Profile, user_id))
-        return StringMessage(data=str(foo))
+        sessionObjects = Session.query(Session.conferenceId == conf.key).fetch(
+        )
+        sessionForms = [self._copySessionToForm(sess)
+                        for sess in sessionObjects]
+        return SessionForms(items=sessionForms)
 
 api = endpoints.api_server([ConferenceApi])  # register API
