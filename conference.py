@@ -84,6 +84,10 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1), )
 
+SESS_POST_REQUEST = endpoints.ResourceContainer(
+    SessionForm,
+    websafeConferenceKey=messages.StringField(1), )
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -549,29 +553,44 @@ class ConferenceApi(remote.Service):
         """Unregister user for selected conference."""
         return self._conferenceRegistration(request, reg=False)
 
-    @endpoints.method(message_types.VoidMessage, StringMessage)
+    @endpoints.method(SESS_POST_REQUEST,
+                      StringMessage,
+                      path='session',
+                      http_method='POST',
+                      name='createSession')
     def createSession(self, request):
-        # Dummy Session
-        testSession = SessionForm(name="CLJS Rawks",
-                                  highlights=["This", "that"],
-                                  speaker="Rich Hickey",
-                                  duration=90,
-                                  typeOfSession="Workshop",
-                                  date="2015-12-25",
-                                  time="09:00:00")
+        """Create new Session."""
+
+        # get the conference
+        conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
+        # check that conference exists
+        if not conf:
+            raise endpoints.notfoundexception(
+                'no conference found with key: %s' %
+                request.websafeConferenceKey)
+
+        # user verification
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.unauthorizedexception('authorization required')
+        user_id = getUserId(user)
+        if user_id != conf.organizerUserId:
+            raise endpoints.ForbiddenException(
+                'Only the owner can update the conference.')
 
         data = {}
-        for field in testSession.all_fields():
-            if field.name == "date":
-                data[field.name] = parse(getattr(testSession,
+        for field in request.all_fields():
+            if field.name == "date" and getattr(request, field.name):
+                data[field.name] = parse(getattr(request,
                                                  field.name)).date()
-            elif field.name == "time":
-                data[field.name] = parse(getattr(testSession,
+            elif field.name == "time" and getattr(request, field.name):
+                data[field.name] = parse(getattr(request,
                                                  field.name)).time()
+            elif field.name == "websafeConferenceKey":
+                pass
             else:
-                data[field.name] = getattr(testSession, field.name)
+                data[field.name] = getattr(request, field.name)
 
-        conf = Conference.query().get()  # Replaced with arguments to function
         p_key = ndb.Key(Conference, conf.key.id())
         s_id = Session.allocate_ids(size=1, parent=p_key)[0]
         s_key = ndb.Key(Session, s_id, parent=p_key)
