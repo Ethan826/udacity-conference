@@ -84,6 +84,10 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1), )
 
+SESS_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    websafeConferenceKey=messages.StringField(1), )
+
 SESS_POST_REQUEST = endpoints.ResourceContainer(
     SessionForm,
     websafeConferenceKey=messages.StringField(1), )
@@ -607,12 +611,23 @@ class ConferenceApi(remote.Service):
         data['key'] = s_key
         data['conferenceId'] = conf.key
         Session(**data).put()
-        return self._copySessionToForm(request
-                                       )  # Must be put in a Session form
+        return self._copySessionToForm(request)
 
-        @endpoints.method()
-        def getConferenceSessions():
-            """Given a conference, return all sessions."""
-            pass
+    @endpoints.method(SESS_GET_REQUEST,
+                      StringMessage,
+                      path='sesssions/{websafeConferenceKey}',
+                      http_method='GET',
+                      name='getConferenceSessions')
+    def getConferenceSessions(self, request):
+        """Given a conference, return all sessions."""
+        wsck = request.websafeConferenceKey
+        conf = ndb.Key(urlsafe=wsck).get()
+        if not conf:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % wsck)
+        foo = Session.query(
+            ancestor=conf.key).fetch()  # This search is not working
+        # confs = Conference.query(ancestor=ndb.Key(Profile, user_id))
+        return StringMessage(data=str(foo))
 
 api = endpoints.api_server([ConferenceApi])  # register API
