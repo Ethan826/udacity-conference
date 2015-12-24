@@ -675,7 +675,7 @@ class ConferenceApi(remote.Service):
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
     @endpoints.method(GET_REQUEST,
-                      StringMessage,
+                      message_types.VoidMessage,
                       path='wishlist/{inputString}',
                       http_method='GET',
                       name='addSessionToWishlist')
@@ -694,12 +694,12 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No session found with key: {}'.format(request.inputString))
 
+        # Add to wishlist (or make a new one if empty)
         currentWishlist = getattr(prof, 'userWishlist')
         updatedWishlist = currentWishlist.append(
             sess.key) if currentWishlist else [sess.key]
         setattr(prof, 'userWishlist', updatedWishlist)
         prof.put()
-        return StringMessage(data=str(getattr(prof, 'userWishlist')))
 
     @endpoints.method(message_types.VoidMessage,
                       StringMessage,
