@@ -35,7 +35,6 @@ from models import SessionForms
 from models import Conference
 from models import ConferenceForm
 from models import ConferenceForms
-from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
 
@@ -364,13 +363,13 @@ class ConferenceApi(remote.Service):
         return pf
 
     def _getProfileFromUser(self):
-        """Return user Profile from datastore, creating new one if non-existent."""
+        """Return user Profile from datastore, creating new one if
+        non-existent."""
         # make sure user is authed
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
 
-        # get Profile from datastore
         user_id = getUserId(user)
         p_key = ndb.Key(Profile, user_id)
         profile = p_key.get()
@@ -551,6 +550,14 @@ class ConferenceApi(remote.Service):
         """Unregister user for selected conference."""
         return self._conferenceRegistration(request, reg=False)
 
+    # ####################################################################### #
+    # Session methods                                                         #
+    # ####################################################################### #
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+    # Session creation and retrieval                                          #
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+
     def _copySessionToForm(self, sess):
         sf = SessionForm()
         for field in sf.all_fields():
@@ -586,6 +593,11 @@ class ConferenceApi(remote.Service):
         if user_id != conf.organizerUserId:
             raise endpoints.ForbiddenException(
                 'Only the owner can update the conference.')
+
+        # Verify name
+        if not request.name:
+            raise endpoints.BadRequestException(
+                "Session 'name' field required")
 
         data = {}
         for field in request.all_fields():
@@ -624,27 +636,59 @@ class ConferenceApi(remote.Service):
                         for sess in sessionObjects]
         return SessionForms(items=sessionForms)
 
+    def _getSessionsByFeature(self, request, field, errMessage):
+        """Abstracts out the functionality of getSessionsBySpeaker and
+        getConferenceSessionsByType"""
+        feature = getattr(request, "inputString")
+        sessionObjects = Session.query(field == feature).fetch()
+        if sessionObjects:
+            return SessionForms(items=[self._copySessionToForm(sess)
+                                       for sess in sessionObjects])
+        raise endpoints.NotFoundException(errMessage)
+
     @endpoints.method(GET_REQUEST,
                       SessionForms,
                       path='sessions/speaker/{inputString}',
                       http_method='GET',
                       name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
-        speaker = getattr(request, "inputString")
-        sessionObjects = Session.query(Session.speaker == speaker).fetch()
-        if sessionObjects:
-            sessionForms = [self._copySessionToForm(sess)
-                            for sess in sessionObjects]
-            return SessionForms(items=sessionForms)
-        raise endpoints.NotFoundException(
-            'No session found with speaker {}'.format(speaker))
+        """Returns all Sessions matching the speaker."""
+        errMessage = 'No session found with speaker {}'.format(
+            request.inputString)
+        return self._getSessionsByFeature(request, Session.speaker, errMessage)
+
+    @endpoints.method(GET_REQUEST,
+                      SessionForms,
+                      path='sessions/{inputString}',
+                      http_method='GET',
+                      name='getConferenceSessionsByType')
+    def getConferenceSessionsByType(self, request):
+        """Returns all Sessions matching the session type."""
+        errMessage = 'No session found with session type {}'.format(
+            request.inputString)
+        return self._getSessionsByFeature(request, Session.typeOfSession,
+                                          errMessage)
+
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+    # Session wishlist methods                                                #
+    # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
     @endpoints.method(message_types.VoidMessage,
                       StringMessage,
-                      path='sessions/{inputString}',
-                      http_method='GET',
-                      name='getConferenceSessionByType')
-    def getConferenceSessionByType(self, request):
-        return StringMessage(data="Foo")
+                      name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        pass
+
+    @endpoints.method(message_types.VoidMessage,
+                      StringMessage,
+                      name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        pass
+
+    @endpoints.method(message_types.VoidMessage,
+                      StringMessage,
+                      name='deleteSessionInWishlist')
+    def deleteSessionInWishlist(self, request):
+        pass
 
 api = endpoints.api_server([ConferenceApi])  # register API
