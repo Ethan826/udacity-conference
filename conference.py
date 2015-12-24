@@ -76,7 +76,7 @@ FIELDS = {
     'MAX_ATTENDEES': 'maxAttendees',
 }
 
-GET_REQUEST = endpoints.ResourceContainer(
+GET_OR_DELETE_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     inputString=messages.StringField(1), )
 
@@ -235,7 +235,7 @@ class ConferenceApi(remote.Service):
         """Update conference w/provided fields & return w/updated info."""
         return self._updateConferenceObject(request)
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       ConferenceForm,
                       path='conference/{inputString}',
                       http_method='GET',
@@ -533,7 +533,7 @@ class ConferenceApi(remote.Service):
         return ConferenceForms(items=[self._copyConferenceToForm(conf, names[
             conf.organizerUserId]) for conf in conferences])
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       BooleanMessage,
                       path='conference/{inputString}',
                       http_method='POST',
@@ -542,7 +542,7 @@ class ConferenceApi(remote.Service):
         """Register user for selected conference."""
         return self._conferenceRegistration(request)
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       BooleanMessage,
                       path='conference/{inputString}',
                       http_method='DELETE',
@@ -619,7 +619,7 @@ class ConferenceApi(remote.Service):
         sess = Session(**data).put()
         return self._copySessionToForm(request)
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       SessionForms,
                       path='sesssions/{inputString}',
                       http_method='GET',
@@ -647,7 +647,7 @@ class ConferenceApi(remote.Service):
                                        for sess in sessionObjects])
         raise endpoints.NotFoundException(errMessage)
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       SessionForms,
                       path='sessions/speaker/{inputString}',
                       http_method='GET',
@@ -658,7 +658,7 @@ class ConferenceApi(remote.Service):
             request.inputString)
         return self._getSessionsByFeature(request, Session.speaker, errMessage)
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       SessionForms,
                       path='sessions/{inputString}',
                       http_method='GET',
@@ -675,6 +675,7 @@ class ConferenceApi(remote.Service):
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
     def _getUserProf(self):
+        """Abstracts out common portions of wishlist methods."""
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
@@ -682,7 +683,7 @@ class ConferenceApi(remote.Service):
         prof = ndb.Key(Profile, user_id).get()
         return prof
 
-    @endpoints.method(GET_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       message_types.VoidMessage,
                       path='wishlist/{inputString}',
                       http_method='GET',
@@ -690,9 +691,7 @@ class ConferenceApi(remote.Service):
     def addSessionToWishlist(self, request):
         """Add session to user wishlist."""
 
-        # Get appropriate entities
         prof = self._getUserProf()
-
         sess = ndb.Key(urlsafe=request.inputString).get()
         if not sess:
             raise endpoints.NotFoundException(
@@ -700,10 +699,18 @@ class ConferenceApi(remote.Service):
 
         # Add to wishlist (or make a new one if empty)
         currentWishlist = getattr(prof, 'userWishlist')
+
+        if sess.key in currentWishlist:  # Handle attempt to add twice.
+            raise endpoints.BadRequestException(
+                'Session with key {} already in wishlist.'.format(
+                    request.inputString))
+
         updatedWishlist = currentWishlist.append(
             sess.key) if currentWishlist else [sess.key]
+
         setattr(prof, 'userWishlist', updatedWishlist)
         prof.put()
+        return message_types.VoidMessage()
 
     # Assignment interpreted per https://goo.gl/HlVAVK
     @endpoints.method(message_types.VoidMessage,
@@ -721,14 +728,31 @@ class ConferenceApi(remote.Service):
         sessionForms = [self._copySessionToForm(key.get())
                         for key in wishlistKeys]
         return SessionForms(items=sessionForms)
-        # sessionForms = [self._copySessionToForm(sess)
-        #                 for sess in sessionObjects]
-        # return SessionForms(items=sessionForms)
 
-    @endpoints.method(message_types.VoidMessage,
-                      StringMessage,
+    @endpoints.method(GET_OR_DELETE_REQUEST,
+                      message_types.VoidMessage,
+                      path='wishlist/{inputString}',
+                      http_method='DELETE',
                       name='deleteSessionInWishlist')
     def deleteSessionInWishlist(self, request):
-        pass
+        """Delete a session from wishlist."""
+        prof = self._getUserProf()
+        sess = ndb.Key(urlsafe=request.inputString).get()
+        if not sess:
+            raise endpoints.NotFoundException(
+                'No session found with key: {}'.format(request.inputString))
+        currentWishlist = getattr(prof, 'userWishlist')
+        try:
+            updatedWishlist = currentWishlist.remove(sess.key)
+            if not updatedWishlist:
+                setattr(prof, 'userWishlist', [])
+            else:
+                setattr(prof, 'userWishlist', updatedWishlist)
+            prof.put()
+        except ValueError:
+            raise endpoints.NotFoundException(
+                'Session with key {} not in wishlist.'.format(
+                    request.inputString))
+        return message_types.VoidMessage()
 
 api = endpoints.api_server([ConferenceApi])  # register API
