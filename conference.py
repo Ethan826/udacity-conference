@@ -674,6 +674,14 @@ class ConferenceApi(remote.Service):
     # Session wishlist methods                                                #
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
+    def _getUserProf(self):
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id = getUserId(user)
+        prof = ndb.Key(Profile, user_id).get()
+        return prof
+
     @endpoints.method(GET_REQUEST,
                       message_types.VoidMessage,
                       path='wishlist/{inputString}',
@@ -683,11 +691,7 @@ class ConferenceApi(remote.Service):
         """Add session to user wishlist."""
 
         # Get appropriate entities
-        user = endpoints.get_current_user()
-        if not user:
-            raise endpoints.UnauthorizedException('Authorization required')
-        user_id = getUserId(user)
-        prof = ndb.Key(Profile, user_id).get()
+        prof = self._getUserProf()
 
         sess = ndb.Key(urlsafe=request.inputString).get()
         if not sess:
@@ -701,11 +705,25 @@ class ConferenceApi(remote.Service):
         setattr(prof, 'userWishlist', updatedWishlist)
         prof.put()
 
+    # Assignment interpreted per https://goo.gl/HlVAVK
     @endpoints.method(message_types.VoidMessage,
-                      StringMessage,
+                      SessionForms,
+                      path='wishlist',
+                      http_method='GET',
                       name='getSessionsInWishlist')
     def getSessionsInWishlist(self, request):
-        pass
+        """Return all wishlisted sessions for signed-in user."""
+        prof = self._getUserProf()
+        wishlistKeys = getattr(prof, 'userWishlist')
+        if not wishlistKeys:
+            return SessionForms([])
+
+        sessionForms = [self._copySessionToForm(key.get())
+                        for key in wishlistKeys]
+        return SessionForms(items=sessionForms)
+        # sessionForms = [self._copySessionToForm(sess)
+        #                 for sess in sessionObjects]
+        # return SessionForms(items=sessionForms)
 
     @endpoints.method(message_types.VoidMessage,
                       StringMessage,
