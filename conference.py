@@ -80,8 +80,12 @@ GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     inputString=messages.StringField(1), )
 
-POST_REQUEST = endpoints.ResourceContainer(
+CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
+    inputString=messages.StringField(1), )
+
+SESS_POST_REQUEST = endpoints.ResourceContainer(
+    SessionForm,
     inputString=messages.StringField(1), )
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -222,7 +226,7 @@ class ConferenceApi(remote.Service):
         """Create new conference."""
         return self._createConferenceObject(request)
 
-    @endpoints.method(POST_REQUEST,
+    @endpoints.method(CONF_POST_REQUEST,
                       ConferenceForm,
                       path='conference/{inputString}',
                       http_method='PUT',
@@ -559,7 +563,7 @@ class ConferenceApi(remote.Service):
         sf.check_initialized()
         return sf
 
-    @endpoints.method(POST_REQUEST,
+    @endpoints.method(SESS_POST_REQUEST,
                       SessionForm,
                       path='sessions',
                       http_method='POST',
@@ -621,14 +625,17 @@ class ConferenceApi(remote.Service):
         return SessionForms(items=sessionForms)
 
     @endpoints.method(GET_REQUEST,
-                      StringMessage,
-                      # SessionForms,
+                      SessionForms,
                       path='sessions/{inputString}',
                       http_method='GET',
                       name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
-        speaker = request.inputString
+        speaker = getattr(request, "inputString")
         sessionObjects = Session.query(Session.speaker == speaker).fetch()
-        return StringMessage(data=type(speaker))
+        if sessionObjects:
+            sessionForms = [self._copySessionToForm(sess)
+                            for sess in sessionObjects]
+            return SessionForms(items=sessionForms)
+        raise endpoints.NotFoundException('No session found with speaker {}'.format(speaker))
 
 api = endpoints.api_server([ConferenceApi])  # register API
