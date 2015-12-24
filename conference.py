@@ -12,6 +12,7 @@ created by wesc on 2014 apr 21
 __author__ = 'wesc+api@google.com (Wesley Chun)'
 
 from datetime import datetime
+import logging
 
 import endpoints
 from dateutil.parser import parse
@@ -615,7 +616,7 @@ class ConferenceApi(remote.Service):
         s_key = ndb.Key(Session, s_id, parent=p_key)
         data['key'] = s_key
         data['conferenceId'] = conf.key
-        Session(**data).put()
+        sess = Session(**data).put()
         return self._copySessionToForm(request)
 
     @endpoints.method(GET_REQUEST,
@@ -673,11 +674,32 @@ class ConferenceApi(remote.Service):
     # Session wishlist methods                                                #
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
 
-    @endpoints.method(message_types.VoidMessage,
+    @endpoints.method(GET_REQUEST,
                       StringMessage,
+                      path='wishlist/{inputString}',
+                      http_method='GET',
                       name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
-        pass
+        """Add session to user wishlist."""
+
+        # Get appropriate entities
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id = getUserId(user)
+        prof = ndb.Key(Profile, user_id).get()
+
+        sess = ndb.Key(urlsafe=request.inputString).get()
+        if not sess:
+            raise endpoints.NotFoundException(
+                'No session found with key: {}'.format(request.inputString))
+
+        currentWishlist = getattr(prof, 'userWishlist')
+        updatedWishlist = currentWishlist.append(
+            sess.key) if currentWishlist else [sess.key]
+        setattr(prof, 'userWishlist', updatedWishlist)
+        prof.put()
+        return StringMessage(data=str(getattr(prof, 'userWishlist')))
 
     @endpoints.method(message_types.VoidMessage,
                       StringMessage,
