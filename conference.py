@@ -626,7 +626,7 @@ class ConferenceApi(remote.Service):
 
     @endpoints.method(GET_REQUEST,
                       SessionForms,
-                      path='sessions/{inputString}',
+                      path='sessions/speaker/{inputString}',
                       http_method='GET',
                       name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
@@ -636,6 +636,15 @@ class ConferenceApi(remote.Service):
             sessionForms = [self._copySessionToForm(sess)
                             for sess in sessionObjects]
             return SessionForms(items=sessionForms)
-        raise endpoints.NotFoundException('No session found with speaker {}'.format(speaker))
+        raise endpoints.NotFoundException(
+            'No session found with speaker {}'.format(speaker))
+
+    @endpoints.method(message_types.VoidMessage,
+                      StringMessage,
+                      path='sessions/{inputString}',
+                      http_method='GET',
+                      name='getConferenceSessionByType')
+    def getConferenceSessionByType(self, request):
+        return StringMessage(data="Foo")
 
 api = endpoints.api_server([ConferenceApi])  # register API
