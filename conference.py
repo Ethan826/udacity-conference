@@ -173,7 +173,7 @@ class ConferenceApi(remote.Service):
 
         # create Conference, send email to organizer confirming
         # creation of Conference & return (modified) ConferenceForm
-        Conference(**data).put()
+        Conference(**data).put().urlsafe()
         taskqueue.add(params={'email': user.email(),
                               'conferenceInfo': repr(request)},
                       url='/tasks/send_confirmation_email')
@@ -608,6 +608,9 @@ class ConferenceApi(remote.Service):
                 data[field.name] = parse(getattr(request, field.name)).date()
             elif field.name == "time" and getattr(request, field.name):
                 data[field.name] = parse(getattr(request, field.name)).time()
+            elif field.name == "speakerKey":
+                data[field.name] = ndb.Key(
+                    urlsafe=getattr(request, field.name))
             elif field.name == "inputString":
                 pass
             else:
@@ -639,26 +642,21 @@ class ConferenceApi(remote.Service):
                         for sess in sessionObjects]
         return SessionForms(items=sessionForms)
 
-    def _getSessionsByFeature(self, request, field, errMessage):
-        """Abstracts out the functionality of getSessionsBySpeaker and
-        getConferenceSessionsByType"""
-        feature = getattr(request, "inputString")
-        sessionObjects = Session.query(field == feature).fetch()
-        if sessionObjects:
-            return SessionForms(items=[self._copySessionToForm(sess)
-                                       for sess in sessionObjects])
-        raise endpoints.NotFoundException(errMessage)
-
-    @endpoints.method(GET_OR_DELETE_REQUEST,
+    @endpoints.method(GET_OR_DELETE_REQUEST,  
                       SessionForms,
                       path='sessions/speaker/{inputString}',
                       http_method='GET',
                       name='getSessionsBySpeaker')
     def getSessionsBySpeaker(self, request):
         """Returns all Sessions matching the speaker."""
-        errMessage = 'No session found with speaker {}'.format(
-            request.inputString)
-        return self._getSessionsByFeature(request, Session.speaker, errMessage)
+        urlSafeKey = request.inputString
+        key = ndb.Key(urlsafe=urlSafeKey)
+        sessionObjects = Speaker.query(ancestor=key).fetch()
+        if sessionObjects:
+            return SessionForms(items=[self._copySessionToForm(sess)
+                                       for sess in sessionObjects])
+        raise endpoints.NotFoundException(
+            'No session found with speaker {}'.format(request.inputString))
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
                       SessionForms,
@@ -667,10 +665,14 @@ class ConferenceApi(remote.Service):
                       name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
         """Returns all Sessions matching the session type."""
-        errMessage = 'No session found with session type {}'.format(
-            request.inputString)
-        return self._getSessionsByFeature(request, Session.typeOfSession,
-                                          errMessage)
+        sessionObjects = Session.query(Session.typeOfSession == getattr(
+            request, 'inputString')).fetch()
+        if sessionObjects:
+            return SessionForms(items=[self._copySessionToForm(sess)
+                                       for sess in sessionObjects])
+        raise endpoints.NotFoundException(
+            'No session found with session type {}'.format(
+                request.inputString))
 
     # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
     # Session wishlist methods                                                #
@@ -773,7 +775,7 @@ class ConferenceApi(remote.Service):
                 "Speaker 'name' field required")
 
         speaker = Speaker(name=request.name)
-        print(speaker.put().urlsafe())
+        speaker.put().urlsafe()
         return request
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
