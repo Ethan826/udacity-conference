@@ -11,7 +11,7 @@ created by wesc on 2014 apr 21
 
 __author__ = 'wesc+api@google.com (Wesley Chun)'
 
-from datetime import datetime
+from datetime import datetime, time
 
 import endpoints
 from dateutil.parser import parse
@@ -642,7 +642,7 @@ class ConferenceApi(remote.Service):
                         for sess in sessionObjects]
         return SessionForms(items=sessionForms)
 
-    @endpoints.method(GET_OR_DELETE_REQUEST,  
+    @endpoints.method(GET_OR_DELETE_REQUEST,
                       SessionForms,
                       path='sessions/speaker/{inputString}',
                       http_method='GET',
@@ -790,5 +790,38 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.inputString)
         return SpeakerForm(name=getattr(speaker, 'name'))
+
+    # ####################################################################### #
+    # Queries                                                                 #
+    # ####################################################################### #
+
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+            path='filterPlayground',
+            http_method='GET', name='filterPlayground')
+    def filterPlayground(self, request):
+        """Filter Playground"""
+
+        # As suggested here: http://goo.gl/HtsZT2
+        q1 = Session.query(Session.typeOfSession != 'Workshop').fetch(
+            keys_only=True)
+        q2 = Session.query(Session.time < time(19)).fetch(keys_only=True)
+        sessionObjects = ndb.get_multi(set(q1).intersection(q2))
+        sessionForms = [self._copySessionToForm(sess)
+                        for sess in sessionObjects]
+        return SessionForms(items=sessionForms)
+
+        # q = Conference.query()
+        # # field = "city"
+        # # operator = "="
+        # # value = "London"
+        # # f = ndb.query.FilterNode(field, operator, value)
+        # # q = q.filter(f)
+        # q = q.filter(Conference.city=="London")
+        # q = q.filter(Conference.topics=="Medical Innovations")
+        # q = q.filter(Conference.month==6)
+
+        # return ConferenceForms(
+        #     items=[self._copyConferenceToForm(conf, "") for conf in q]
+        # )
 
 api = endpoints.api_server([ConferenceApi])  # register API
