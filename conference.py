@@ -11,7 +11,7 @@ created by wesc on 2014 apr 21
 
 __author__ = 'wesc+api@google.com (Wesley Chun)'
 
-from datetime import datetime, time
+from datetime import datetime, date, time, timedelta
 
 import endpoints
 from dateutil.parser import parse
@@ -173,7 +173,8 @@ class ConferenceApi(remote.Service):
 
         # create Conference, send email to organizer confirming
         # creation of Conference & return (modified) ConferenceForm
-        Conference(**data).put().urlsafe()
+        print(Conference(**data).put().urlsafe())  # for debugging
+        # Conference(**data).put().urlsafe()  # for production
         taskqueue.add(params={'email': user.email(),
                               'conferenceInfo': repr(request)},
                       url='/tasks/send_confirmation_email')
@@ -215,7 +216,8 @@ class ConferenceApi(remote.Service):
                         conf.month = data.month
                 # write to Conference object
                 setattr(conf, field.name, data)
-        conf.put()
+        print(conf.put().urlsafe())  # For debugging
+        # conf.put()  # For production
         prof = ndb.Key(Profile, user_id).get()
         return self._copyConferenceToForm(conf, getattr(prof, 'displayName'))
 
@@ -382,7 +384,8 @@ class ConferenceApi(remote.Service):
                               displayName=user.nickname(),
                               mainEmail=user.email(),
                               teeShirtSize=str(TeeShirtSize.NOT_SPECIFIED), )
-            profile.put()
+            print(profile.put().urlsafe())  # for debugging
+            # profile.put()  # for production
 
         return profile  # return Profile
 
@@ -402,9 +405,10 @@ class ConferenceApi(remote.Service):
                         #    setattr(prof, field, str(val).upper())
                         # else:
                         #    setattr(prof, field, val)
-                        prof.put()
+                        print(prof.put().urlsafe())  # for debugging
+                        # prof.put()  # for productiong
 
-        # return ProfileForm
+                        # return ProfileForm
         return self._copyProfileToForm(prof)
 
     @endpoints.method(message_types.VoidMessage,
@@ -568,6 +572,9 @@ class ConferenceApi(remote.Service):
                 if (field.name == "date" or field.name == "time") and getattr(
                         sess, field.name):
                     setattr(sf, field.name, str(getattr(sess, field.name)))
+                elif field.name == 'speakerKey':
+                    setattr(sf, field.name, getattr(sess,
+                                                    field.name).urlsafe())
                 else:
                     setattr(sf, field.name, getattr(sess, field.name))
         sf.check_initialized()
@@ -622,6 +629,7 @@ class ConferenceApi(remote.Service):
         data['key'] = s_key
         data['conferenceId'] = conf.key
         sess = Session(**data).put()
+        print(sess.urlsafe())  # for debugging
         return self._copySessionToForm(request)
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
@@ -638,6 +646,7 @@ class ConferenceApi(remote.Service):
                 'No conference found with key: %s' % wsck)
         sessionObjects = Session.query(Session.conferenceId == conf.key).fetch(
         )
+        print(str(sessionObjects))
         sessionForms = [self._copySessionToForm(sess)
                         for sess in sessionObjects]
         return SessionForms(items=sessionForms)
@@ -713,7 +722,8 @@ class ConferenceApi(remote.Service):
             sess.key) if currentWishlist else [sess.key]
 
         setattr(prof, 'userWishlist', updatedWishlist)
-        prof.put()
+        print(prof.put().urlsafe())  # for debugging
+        # prof.put()
         return message_types.VoidMessage()
 
     # Assignment interpreted per https://goo.gl/HlVAVK
@@ -752,7 +762,8 @@ class ConferenceApi(remote.Service):
                 setattr(prof, 'userWishlist', [])
             else:
                 setattr(prof, 'userWishlist', updatedWishlist)
-            prof.put()
+            print(prof.put().urlsafe())  # for debugging
+            # prof.put()  # for production
         except ValueError:
             raise endpoints.NotFoundException(
                 'Session with key {} not in wishlist.'.format(
@@ -775,7 +786,8 @@ class ConferenceApi(remote.Service):
                 "Speaker 'name' field required")
 
         speaker = Speaker(name=request.name)
-        speaker.put().urlsafe()
+        print(speaker.put().urlsafe())  # for debugging
+        # speaker.put()  # for production
         return request
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
@@ -795,11 +807,14 @@ class ConferenceApi(remote.Service):
     # Queries                                                                 #
     # ####################################################################### #
 
-    @endpoints.method(message_types.VoidMessage, SessionForms,
-            path='filterPlayground',
-            http_method='GET', name='filterPlayground')
-    def filterPlayground(self, request):
-        """Filter Playground"""
+    @endpoints.method(message_types.VoidMessage,
+                      SessionForms,
+                      path='queries1',
+                      http_method='GET',
+                      name='query_noSeminarsOrLateNights')
+    def query_noSeminarsOrLateNights(self, request):
+        """How would you handle a query for all non-workshop sessions before 7
+        pm?"""
 
         # As suggested here: http://goo.gl/HtsZT2
         q1 = Session.query(Session.typeOfSession != 'Workshop').fetch(
@@ -810,18 +825,35 @@ class ConferenceApi(remote.Service):
                         for sess in sessionObjects]
         return SessionForms(items=sessionForms)
 
-        # q = Conference.query()
-        # # field = "city"
-        # # operator = "="
-        # # value = "London"
-        # # f = ndb.query.FilterNode(field, operator, value)
-        # # q = q.filter(f)
-        # q = q.filter(Conference.city=="London")
-        # q = q.filter(Conference.topics=="Medical Innovations")
-        # q = q.filter(Conference.month==6)
+    @endpoints.method(message_types.VoidMessage,
+                      SessionForms,
+                      path='queries2',
+                      http_method='GET',
+                      name='query_afterLunchSessions')
+    def query_afterLunchSessions(self, request):
+        """Select only sessions starting after 1 p.m."""
+        sessionObjects = Session.query(Session.time >= time(13)).fetch()
+        sessionForms = [self._copySessionToForm(sess)
+                        for sess in sessionObjects]
+        return SessionForms(items=sessionForms)
 
-        # return ConferenceForms(
-        #     items=[self._copyConferenceToForm(conf, "") for conf in q]
-        # )
+    @endpoints.method(message_types.VoidMessage,
+                      ConferenceForms,
+                      path='queries3',
+                      http_method='GET',
+                      name='query_smallConferences')
+    def query_smallConferences(self, request):
+        """Select only conferences with fewer than 50 maxAttendees."""
+        conferenceObjects = Conference.query(Conference.maxAttendees < 50)
+        conferenceForms = []
+        if conferenceObjects:
+            for conf in conferenceObjects:
+                displayName = None
+                if hasattr(conf.key.parent().get(), 'displayName'):
+                    displayName = getattr(conf.key.parent().get(),
+                                          'displayName')
+                form = self._copyConferenceToForm(conf, displayName)
+                conferenceForms.append(form)
+        return ConferenceForms(items=conferenceForms)
 
 api = endpoints.api_server([ConferenceApi])  # register API
