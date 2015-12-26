@@ -12,7 +12,6 @@ created by wesc on 2014 apr 21
 __author__ = 'wesc+api@google.com (Wesley Chun)'
 
 from datetime import datetime
-import logging
 
 import endpoints
 from dateutil.parser import parse
@@ -33,6 +32,8 @@ from models import BooleanMessage
 from models import Session
 from models import SessionForm
 from models import SessionForms
+from models import Speaker
+from models import SpeakerForm
 from models import Conference
 from models import ConferenceForm
 from models import ConferenceForms
@@ -122,7 +123,8 @@ class ConferenceApi(remote.Service):
         return cf
 
     def _createConferenceObject(self, request):
-        """Create or update Conference object, returning ConferenceForm/request."""
+        """Create or update Conference object, returning
+        ConferenceForm/request."""
         # preload necessary data items
         user = endpoints.get_current_user()
         if not user:
@@ -309,10 +311,10 @@ class ConferenceApi(remote.Service):
 
             # Every operation except "=" is an inequality
             if filtr["operator"] != "=":
-                # check if inequality operation has been used in previous filters
-                # disallow the filter if inequality was performed on a different field before
-                # track the field on which the inequality operation is
-                # performed
+                # check if inequality operation has been used in previous
+                # filters disallow the filter if inequality was performed on a
+                # different field before track the field on which the
+
                 if inequality_field and inequality_field != filtr["field"]:
                     raise endpoints.BadRequestException(
                         "Inequality filter is allowed on only one field.")
@@ -754,5 +756,37 @@ class ConferenceApi(remote.Service):
                 'Session with key {} not in wishlist.'.format(
                     request.inputString))
         return message_types.VoidMessage()
+
+    # ####################################################################### #
+    # Speaker methods                                                         #
+    # ####################################################################### #
+
+    @endpoints.method(SpeakerForm,
+                      SpeakerForm,
+                      path='speaker',
+                      http_method='POST',
+                      name='createSpeaker')
+    def createSpeaker(self, request):
+        """Create a speaker."""
+        if not request.name:
+            raise endpoints.BadRequestException(
+                "Speaker 'name' field required")
+
+        speaker = Speaker(name=request.name)
+        print(speaker.put().urlsafe())
+        return request
+
+    @endpoints.method(GET_OR_DELETE_REQUEST,
+                      SpeakerForm,
+                      path='speaker/{inputString}',
+                      http_method='GET',
+                      name='getSpeaker')
+    def getSpeaker(self, request):
+        """Given a websafe key, returns the appropriate speaker."""
+        speaker = ndb.Key(urlsafe=request.inputString).get()
+        if not speaker:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.inputString)
+        return SpeakerForm(name=getattr(speaker, 'name'))
 
 api = endpoints.api_server([ConferenceApi])  # register API
