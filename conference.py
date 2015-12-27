@@ -672,7 +672,7 @@ class ConferenceApi(remote.Service):
         """Returns all Sessions matching the speaker."""
         urlSafeKey = request.inputString
         key = ndb.Key(urlsafe=urlSafeKey)
-        sessionObjects = Speaker.query(ancestor=key).fetch()
+        sessionObjects = Session.query(ancestor=key).fetch()
         if sessionObjects:
             return SessionForms(items=[self._copySessionToForm(sess)
                                        for sess in sessionObjects])
