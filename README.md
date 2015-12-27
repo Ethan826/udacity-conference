@@ -28,6 +28,9 @@ necessarily require any permission to create a `Speaker` because a
 `Speaker` need not be associated with any particular `Conference` or
 `Session`.
 
+Methods involving `Speaker`s require key-based lookups. E.g.,
+`getSessionBySpeaker()`
+
 The `getFeaturedSpeaker()` method returns either a string corresponding
 to the featured speaker’s name or an empty string if there is not a
 featured speaker.
@@ -71,7 +74,8 @@ Language
 APIs
 ----
 
--   [Google Cloud Endpoints](https://developers.google.com/appengine/docs/python/endpoints/)
+-   [Google Cloud
+    Endpoints](https://developers.google.com/appengine/docs/python/endpoints/)
 
 Setup Instructions
 ------------------
@@ -80,16 +84,15 @@ Setup Instructions
     have registered in the App Engine admin console and would like to
     use to host your instance of this sample.
 2.  Update the values at the top of `settings.py` to reflect the
-    respective client IDs you have registered in the
-    [Developer Console](https://console.developers.google.com/).
+    respective client IDs you have registered in the [Developer
+    Console](https://console.developers.google.com/).
 3.  Update the value of CLIENT\_ID in `static/js/app.js` to the Web
     client ID
-4.  (Optional) Mark the configuration files as unchanged as follows: `$
-    git update-index --assume-unchanged app.yaml settings.py
-    static/js/app.js`
+4.  (Optional) Mark the configuration files as unchanged as follows:
+    `$ git update-index --assume-unchanged app.yaml settings.py static/js/app.js`
 5.  Run the app with the devserver using `dev_appserver.py DIR`, and
     ensure it’s running by visiting your local server’s address (by
     default [localhost:8080](https://localhost:8080/).)
-6.  (Optional) Generate your client library(ies) with
-    [the endpoints tool](https://developers.google.com/appengine/docs/python/endpoints/endpoints_tool).
+6.  (Optional) Generate your client library(ies) with [the endpoints
+    tool](https://developers.google.com/appengine/docs/python/endpoints/endpoints_tool).
 7.  Deploy your application.
