@@ -636,23 +636,12 @@ class ConferenceApi(remote.Service):
         sess = Session(**data).put()
         print(sess.urlsafe())  # for debugging
 
-        # Handle featured speaker here to only count after commit works.
+        # Put handling the featured speaker logic on the taskqueue
         if data['speakerKey']:
-            speaker = getattr(request, 'speakerKey')
-            speakerKey = ndb.Key(urlsafe=speaker)
+            taskqueue.add(params={'speaker': getattr(request, 'speakerKey'),
+                                  'conf': conf.key.urlsafe()},
+                        url='/tasks/handle_featured_speaker')
 
-            # Check if the Speaker's sessions, filtered by the conference to
-            # which the speaker's session was just added.
-            numSessions = Session.query(
-                ndb.AND(Session.speakerKey == speakerKey,
-                        Session.conferenceId == ndb.Key(urlsafe=getattr(
-                            request, 'inputString')))).count()
-            if numSessions >= 2:
-                memcache.set(MEMCACHE_FEATURED_KEY, speakerKey.get().name)
-                print("\n\n\n\nHere")
-
-        confs = Conference.query(
-            ancestor=ndb.Key(Profile, user_id))  # Dead code?
         return self._copySessionToForm(request)
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
@@ -836,6 +825,10 @@ class ConferenceApi(remote.Service):
         string."""
         featured = memcache.get(MEMCACHE_FEATURED_KEY) or ""
         return StringMessage(data=featured)
+
+    # taskqueue.add(params={'email': user.email(),
+    #                         'conferenceInfo': repr(request)},
+    #                 url='/tasks/send_confirmation_email')
 
     # ####################################################################### #
     # Queries                                                                 #
