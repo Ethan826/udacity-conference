@@ -80,19 +80,10 @@ APIs
 Setup Instructions
 ------------------
 
-1.  Update the value of `application` in `app.yaml` to the app ID you
-    have registered in the App Engine admin console and would like to
-    use to host your instance of this sample.
-2.  Update the values at the top of `settings.py` to reflect the
-    respective client IDs you have registered in the [Developer
-    Console](https://console.developers.google.com/).
-3.  Update the value of CLIENT\_ID in `static/js/app.js` to the Web
-    client ID
-4.  (Optional) Mark the configuration files as unchanged as follows:
-    `$ git update-index --assume-unchanged app.yaml settings.py static/js/app.js`
-5.  Run the app with the devserver using `dev_appserver.py DIR`, and
+1.  Run the app with the devserver using `dev_appserver.py DIR`, and
     ensure it’s running by visiting your local server’s address (by
     default [localhost:8080](https://localhost:8080/).)
-6.  (Optional) Generate your client library(ies) with [the endpoints
+2.  (Optional) Generate your client library(ies) with [the endpoints
     tool](https://developers.google.com/appengine/docs/python/endpoints/endpoints_tool).
-7.  Deploy your application.
+3.  To view the deployed instance of this app, visit
+    <http://conference-1152.appspot.com>.
