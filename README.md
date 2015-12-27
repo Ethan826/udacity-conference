@@ -13,7 +13,7 @@ The `createSession()` method also puts a query into the taskqueue to determine
 if the same speaker has ben registered for a second or additional `Session`. If
 so, the taskqueue will set the `memcache` key for `FEATURED_SPEAKER`.
 
-The private \_copy`Session`ToForm() method handles the possibility that
+The private `_copySessionToForm()` method handles the possibility that
 a key could either be urlsafe (as when it is passed in as an argument
 for an inquiry).
 
@@ -43,17 +43,17 @@ relationship with `Session`s, which is the basis of determining a
 featured speaker.
 
 I have opted throughout for strong consistency rather than eventual
-consistency. I recongize that this creates a performance issue, but
+consistency. I recongize that this results in lower performance, but
 until performance becomes an issue for a website for creating
 conferences (which does not seem plausibly to require high performance),
-I opted for accuracy over speed.
+I generally opted for accuracy over speed.
 
 ### Additional queries
 
 The `query_noSeminarsOrLateNights()` works around the limitation on
 inequality queries (caused by the requirement that two different
 properties—time and type of session—have inequality filters) by
-composing two separate queries as a set. This method was suggested
+composing two separate queries as a set union. This method was suggested
 [here](http://goo.gl/HtsZT2).
 
 The additional queries are straightforward. The
