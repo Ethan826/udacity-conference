@@ -50,6 +50,7 @@ from utils import getUserId
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
+MEMCACHE_FEATURED_KEY = "FEATURED_SPEAKER"
 ANNOUNCEMENT_TPL = ('Last chance to attend! The following conferences '
                     'are nearly sold out: %s')
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -573,8 +574,12 @@ class ConferenceApi(remote.Service):
                         sess, field.name):
                     setattr(sf, field.name, str(getattr(sess, field.name)))
                 elif field.name == 'speakerKey':
-                    setattr(sf, field.name, getattr(sess,
-                                                    field.name).urlsafe())
+                    # Handle possibility that key is a key or urlsafe key
+                    if type(getattr(sess, field.name)) == ndb.Key:
+                        setattr(sf, field.name, getattr(sess,
+                                                        field.name).urlsafe())
+                    else:
+                        setattr(sf, field.name, getattr(sess, field.name))
                 else:
                     setattr(sf, field.name, getattr(sess, field.name))
         sf.check_initialized()
@@ -598,7 +603,7 @@ class ConferenceApi(remote.Service):
         # user verification
         user = endpoints.get_current_user()
         if not user:
-            raise endpoints.unauthorizedexception('authorization required')
+            raise endpoints.UnauthorizedException('Authorization required')
         user_id = getUserId(user)
         if user_id != conf.organizerUserId:
             raise endpoints.ForbiddenException(
@@ -630,6 +635,24 @@ class ConferenceApi(remote.Service):
         data['conferenceId'] = conf.key
         sess = Session(**data).put()
         print(sess.urlsafe())  # for debugging
+
+        # Handle featured speaker here to only count after commit works.
+        if data['speakerKey']:
+            speaker = getattr(request, 'speakerKey')
+            speakerKey = ndb.Key(urlsafe=speaker)
+
+            # Check if the Speaker's sessions, filtered by the conference to
+            # which the speaker's session was just added.
+            numSessions = Session.query(
+                ndb.AND(Session.speakerKey == speakerKey,
+                        Session.conferenceId == ndb.Key(urlsafe=getattr(
+                            request, 'inputString')))).count()
+            if numSessions >= 2:
+                memcache.set(MEMCACHE_FEATURED_KEY, speakerKey.get().name)
+                print("\n\n\n\nHere")
+
+        confs = Conference.query(
+            ancestor=ndb.Key(Profile, user_id))  # Dead code?
         return self._copySessionToForm(request)
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
@@ -802,6 +825,17 @@ class ConferenceApi(remote.Service):
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % request.inputString)
         return SpeakerForm(name=getattr(speaker, 'name'))
+
+    @endpoints.method(message_types.VoidMessage,
+                      StringMessage,
+                      path='featured',
+                      http_method='GET',
+                      name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Returns the name of the featured speaker if set else empty
+        string."""
+        featured = memcache.get(MEMCACHE_FEATURED_KEY) or ""
+        return StringMessage(data=featured)
 
     # ####################################################################### #
     # Queries                                                                 #
