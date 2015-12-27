@@ -9,9 +9,9 @@ Design choices
 Each `Session` holds its parent’s `conferenceId()` of type
 `ndb.KeyProperty`.
 
-The `createSession()` method also monitors for the same speaker being
-registered for a second or additional `Session` and sets the `memcache`
-key for `FEATURED_SPEAKER`.
+The `createSession()` method also puts a query into the taskqueue to determine
+if the same speaker has ben registered for a second or additional `Session`. If
+so, the taskqueue will set the `memcache` key for `FEATURED_SPEAKER`.
 
 The private \_copy`Session`ToForm() method handles the possibility that
 a key could either be urlsafe (as when it is passed in as an argument
