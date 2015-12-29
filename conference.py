@@ -620,7 +620,7 @@ class ConferenceApi(remote.Service):
                 data[field.name] = parse(getattr(request, field.name)).date()
             elif field.name == "time" and getattr(request, field.name):
                 data[field.name] = parse(getattr(request, field.name)).time()
-            elif field.name == "speakerKey":
+            elif field.name == "speakerKey" and getattr(request, field.name):
                 data[field.name] = ndb.Key(
                     urlsafe=getattr(request, field.name))
             elif field.name == "inputString":
