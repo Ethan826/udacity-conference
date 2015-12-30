@@ -746,6 +746,7 @@ class ConferenceApi(remote.Service):
         # in models.py on Profile as
         #     userWishlist = ndb.KeyProperty(repeated=True)
 
+        currentWishlist = getattr(prof, 'userWishlist')
         updatedWishlist = currentWishlist.append(
             sess.key) if currentWishlist else [sess.key]
 
@@ -763,6 +764,7 @@ class ConferenceApi(remote.Service):
     def getSessionsInWishlist(self, request):
         """Return all wishlisted sessions for signed-in user."""
         prof = self._getUserProf()
+        
         wishlistKeys = getattr(prof, 'userWishlist')
 
         sessionForms = [self._copySessionToForm(key.get())
