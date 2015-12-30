@@ -20,8 +20,7 @@ from google.appengine.ext import ndb
 from models import Session
 
 from conference import ConferenceApi
-
-MEMCACHE_FEATURED_KEY = "FEATURED_SPEAKER"
+from conference import MEMCACHE_FEATURED_KEY
 
 
 class SetAnnouncementHandler(webapp2.RequestHandler):
@@ -44,19 +43,24 @@ class SendConfirmationEmailHandler(webapp2.RequestHandler):
 
 
 class HandleFeaturedSpeaker(webapp2.RequestHandler):
+    """Perform inquiry to determine and set featured speaker."""
+
     def post(self):
         speaker = self.request.get('speaker')
         speakerKey = ndb.Key(urlsafe=speaker)
 
-        print("\n\n\n{}".format(self.request.get('conf')))
-        conf = self.request.get('conf')
-        confKey = ndb.Key(urlsafe=conf)
+        confKey = ndb.Key(urlsafe=self.request.get('conf'))
 
-        numSessions = Session.query(
-            ndb.AND(Session.speakerKey == speakerKey, Session.conferenceId ==
-                    confKey)).count()
-        if numSessions >= 2:
-            memcache.set(MEMCACHE_FEATURED_KEY, speakerKey.get().name)
+        # If a newly added speaker is speaking at two or more sessions, make
+        # that speaker the new featured speaker and speaker's sessions.
+        sess = Session.query(
+            ancestor=confKey).filter(Session.speakerKey == speakerKey)
+        if sess.count() > 2:
+            # No advantage to generator if all values realized, I don't think
+            sessNames = ", ".join([s.name for s in sess])
+            message = "Featured Speaker: {}, presenting {}.".format(
+                speakerKey.get().name, sessNames)
+            memcache.set(MEMCACHE_FEATURED_KEY, message)
 
 
 app = webapp2.WSGIApplication(

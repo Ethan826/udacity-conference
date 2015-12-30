@@ -11,7 +11,9 @@ created by wesc on 2014 apr 21
 
 __author__ = 'wesc+api@google.com (Wesley Chun)'
 
-from datetime import datetime, date, time, timedelta
+from datetime import datetime
+from datetime import date
+from datetime import time
 
 import endpoints
 from dateutil.parser import parse
@@ -78,6 +80,10 @@ FIELDS = {
     'MAX_ATTENDEES': 'maxAttendees',
 }
 
+# The Udacity evaluator suggested creating a more descriptive name for
+# inputString. But I have abstracted all of the Get or Delete requests into a
+# single ResourceContainer, so per-endpoint naming is not possible.
+
 GET_OR_DELETE_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     inputString=messages.StringField(1), )
@@ -89,6 +95,10 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
 SESS_POST_REQUEST = endpoints.ResourceContainer(
     SessionForm,
     inputString=messages.StringField(1), )
+
+GET_CONF_SESS_BY_TYPE_REQUEST = endpoints.ResourceContainer(
+    wsck=messages.StringField(1),
+    sessType=messages.StringField(2), )
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -569,6 +579,8 @@ class ConferenceApi(remote.Service):
     def _copySessionToForm(self, sess):
         sf = SessionForm()
         for field in sf.all_fields():
+            if field.name == "websafeKey":
+                setattr(sf, field.name, sess.key.urlsafe())
             if hasattr(sess, field.name):
                 if (field.name == "date" or field.name == "time") and getattr(
                         sess, field.name):
@@ -623,30 +635,27 @@ class ConferenceApi(remote.Service):
             elif field.name == "speakerKey" and getattr(request, field.name):
                 data[field.name] = ndb.Key(
                     urlsafe=getattr(request, field.name))
-            elif field.name == "inputString":
+            elif field.name == "inputString" or field.name == "websafeKey":
                 pass
             else:
                 data[field.name] = getattr(request, field.name)
-
-        p_key = ndb.Key(Conference, conf.key.id())
+        p_key = ndb.Key(urlsafe=request.inputString)
         s_id = Session.allocate_ids(size=1, parent=p_key)[0]
         s_key = ndb.Key(Session, s_id, parent=p_key)
         data['key'] = s_key
-        data['conferenceId'] = conf.key
-        sess = Session(**data).put()
-        print(sess.urlsafe())  # for debugging
+        key = Session(**data).put().urlsafe()
 
         # Put handling the featured speaker logic on the taskqueue
         if data['speakerKey']:
             taskqueue.add(params={'speaker': getattr(request, 'speakerKey'),
                                   'conf': conf.key.urlsafe()},
-                        url='/tasks/handle_featured_speaker')
+                          url='/tasks/handle_featured_speaker')
 
-        return self._copySessionToForm(request)
+        return self._copySessionToForm(ndb.Key(urlsafe=key).get())
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
                       SessionForms,
-                      path='sesssions/{inputString}',
+                      path='sessions/{inputString}',
                       http_method='GET',
                       name='getConferenceSessions')
     def getConferenceSessions(self, request):
@@ -656,9 +665,7 @@ class ConferenceApi(remote.Service):
         if not conf:
             raise endpoints.NotFoundException(
                 'No conference found with key: %s' % wsck)
-        sessionObjects = Session.query(Session.conferenceId == conf.key).fetch(
-        )
-        print(str(sessionObjects))
+        sessionObjects = Session.query(ancestor=ndb.Key(urlsafe=wsck))
         sessionForms = [self._copySessionToForm(sess)
                         for sess in sessionObjects]
         return SessionForms(items=sessionForms)
@@ -673,21 +680,24 @@ class ConferenceApi(remote.Service):
         urlSafeKey = request.inputString
         key = ndb.Key(urlsafe=urlSafeKey)
         sessionObjects = Session.query(Session.speakerKey == key).fetch()
-        if sessionObjects:
-            return SessionForms(items=[self._copySessionToForm(sess)
-                                       for sess in sessionObjects])
-        raise endpoints.NotFoundException(
-            'No session found with speaker {}'.format(request.inputString))
+        return SessionForms(
+            items=[self._copySessionToForm(sess)  # TODO: Make sure works empty
+                   for sess in sessionObjects])
 
-    @endpoints.method(GET_OR_DELETE_REQUEST,
+    # GET_CONF_SESS_BY_TYPE_REQUEST = endpoints.ResourceContainer(
+    #     wsck=message.StringField(1),
+    #     sessType=messages.StringField(2), )
+
+    @endpoints.method(GET_CONF_SESS_BY_TYPE_REQUEST,
                       SessionForms,
-                      path='sessions/{inputString}',
-                      http_method='GET',
+                      path='sessions/type/{wsck}',
+                      http_method='POST',
                       name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
-        """Returns all Sessions matching the session type."""
-        sessionObjects = Session.query(Session.typeOfSession == getattr(
-            request, 'inputString')).fetch()
+        """Returns all Sessions matching the session type passed in the address."""
+        q = Session.query(ancestor=ndb.Key(urlsafe=request.wsck))
+        sessionObjects = q.filter(Session.typeOfSession == getattr(request,
+                                                                   'sessType'))
         if sessionObjects:
             return SessionForms(items=[self._copySessionToForm(sess)
                                        for sess in sessionObjects])
@@ -711,7 +721,7 @@ class ConferenceApi(remote.Service):
     @endpoints.method(GET_OR_DELETE_REQUEST,
                       message_types.VoidMessage,
                       path='wishlist/{inputString}',
-                      http_method='GET',
+                      http_method='POST',
                       name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
         """Add session to user wishlist."""
@@ -723,12 +733,18 @@ class ConferenceApi(remote.Service):
                 'No session found with key: {}'.format(request.inputString))
 
         # Add to wishlist (or make a new one if empty)
-        currentWishlist = getattr(prof, 'userWishlist')
 
-        if sess.key in currentWishlist:  # Handle attempt to add twice.
+        if sess.key in prof.userWishlist:  # Handle attempt to add twice.
             raise endpoints.BadRequestException(
                 'Session with key {} already in wishlist.'.format(
                     request.inputString))
+
+        # I am confused because the feedback says that I am "directly assigning
+        # user input to your database without any error checking" but that I
+        # "can solve most of them by storing Keys not as Strings, but as Keys
+        # themselves." But I think I am storing them as keys. They are defined
+        # in models.py on Profile as
+        #     userWishlist = ndb.KeyProperty(repeated=True)
 
         updatedWishlist = currentWishlist.append(
             sess.key) if currentWishlist else [sess.key]
@@ -748,8 +764,6 @@ class ConferenceApi(remote.Service):
         """Return all wishlisted sessions for signed-in user."""
         prof = self._getUserProf()
         wishlistKeys = getattr(prof, 'userWishlist')
-        if not wishlistKeys:
-            return SessionForms([])
 
         sessionForms = [self._copySessionToForm(key.get())
                         for key in wishlistKeys]
@@ -798,9 +812,9 @@ class ConferenceApi(remote.Service):
                 "Speaker 'name' field required")
 
         speaker = Speaker(name=request.name)
-        print(speaker.put().urlsafe())  # for debugging
-        # speaker.put()  # for production
-        return request
+        key = speaker.put().urlsafe()  # for debugging
+        print(key)  # for debugging
+        return SpeakerForm(name=request.name, websafeKey=key)
 
     @endpoints.method(GET_OR_DELETE_REQUEST,
                       SpeakerForm,
@@ -826,20 +840,16 @@ class ConferenceApi(remote.Service):
         featured = memcache.get(MEMCACHE_FEATURED_KEY) or ""
         return StringMessage(data=featured)
 
-    # taskqueue.add(params={'email': user.email(),
-    #                         'conferenceInfo': repr(request)},
-    #                 url='/tasks/send_confirmation_email')
-
     # ####################################################################### #
     # Queries                                                                 #
     # ####################################################################### #
 
     @endpoints.method(message_types.VoidMessage,
                       SessionForms,
-                      path='queries1',
+                      path='query/noworkshopsorlatenights',
                       http_method='GET',
-                      name='query_noSeminarsOrLateNights')
-    def query_noSeminarsOrLateNights(self, request):
+                      name='query_noWorkshopsOrLateNights')
+    def query_noWorkshopsOrLateNights(self, request):
         """How would you handle a query for all non-workshop sessions before 7
         pm?"""
 
@@ -854,7 +864,7 @@ class ConferenceApi(remote.Service):
 
     @endpoints.method(message_types.VoidMessage,
                       SessionForms,
-                      path='queries2',
+                      path='query/afterlunchsessions',
                       http_method='GET',
                       name='query_afterLunchSessions')
     def query_afterLunchSessions(self, request):
@@ -866,7 +876,7 @@ class ConferenceApi(remote.Service):
 
     @endpoints.method(message_types.VoidMessage,
                       ConferenceForms,
-                      path='queries3',
+                      path='query/smallconferences',
                       http_method='GET',
                       name='query_smallConferences')
     def query_smallConferences(self, request):

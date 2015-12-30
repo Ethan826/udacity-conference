@@ -64,7 +64,6 @@ class Session(ndb.Model):
     typeOfSession = ndb.StringProperty()  # E.g., workshop
     date = ndb.DateProperty()
     time = ndb.TimeProperty()
-    conferenceId = ndb.KeyProperty()
 
 
 class SessionForm(messages.Message):
@@ -76,6 +75,7 @@ class SessionForm(messages.Message):
     typeOfSession = messages.StringField(5)
     date = messages.StringField(6)
     time = messages.StringField(7)
+    websafeKey = messages.StringField(8)
 
 
 class SessionForms(messages.Message):
@@ -91,6 +91,7 @@ class Speaker(ndb.Model):
 class SpeakerForm(messages.Message):
     """Speaker -- Speaker form"""
     name = messages.StringField(1)
+    websafeKey = messages.StringField(2)
 
 
 class Conference(ndb.Model):

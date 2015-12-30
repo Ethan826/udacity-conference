@@ -6,16 +6,26 @@ Design choices
 ### `Session` implementation
 
 `Session`s have been implemented in a manner similar to `Conference`s.
-Each `Session` holds its parent’s `conferenceId()` of type
-`ndb.KeyProperty`.
+Each `Session` is an ancestor of a single `Conference`, which can be
+used in querying.
 
-The `createSession()` method also puts a query into the taskqueue to determine
-if the same speaker has ben registered for a second or additional `Session`. If
-so, the taskqueue will set the `memcache` key for `FEATURED_SPEAKER`.
+The `createSession()` method also puts a query into the taskqueue to
+determine if the same speaker has ben registered for a second or
+additional `Session`. If so, the taskqueue will set the `memcache` key
+for `FEATURED_SPEAKER`.
 
-The private `_copySessionToForm()` method handles the possibility that
-a key could either be urlsafe (as when it is passed in as an argument
-for an inquiry).
+The private `_copySessionToForm()` method handles the possibility that a
+key could either be urlsafe (as when it is passed in as an argument for
+an inquiry).
+
+Several data fields in `Session` are `StringProperty`s: `name`
+(required), `highlights` (a collection of strings), and
+`typeOfSession`—all are strings. The `date` is handled as a DateProperty
+and the `time` as a `TimeProperty`, straightforwardly enough. The third
+party `dateutil` makes this feature robust against a variety of entries.
+The `speakerKey` field is a `KeyProperty`, which provides some
+protection against data-entry errors or malicious input. The `duration`
+field is expressed in minutes as an `IntegerProperty`.
 
 `Session`s are stored as keys to a wishlist held in user profiles.
 
